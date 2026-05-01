@@ -1,3 +1,5 @@
+Ở phần module sẽ chưa các func của 1 trang ví dụ nếu làm ở trang employees thì Func sẽ là của trang đó. tất cả func của trang đó sẽ ở đó
+
 src/
  ├── config/                  Nơi chứa tất cả config dùng chung
  |   ├── env.py
@@ -17,3 +19,8 @@ src/
  │   ├── attendance/
  │   └── auth/
  └── main.py
+
+
+
+ tải tất cả thư viện: 
+            pip install -r requirements.txt
