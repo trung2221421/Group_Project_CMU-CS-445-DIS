@@ -1,0 +1,24 @@
+các file đã sửa gồm
+Backend
+
+/** .venv/
+    src/
+        middlewares/
+            __init__.py
+            cors_middleware.py
+            employee_cors.py
+        modules/
+            employees (Toàn Bộ)
+    main.py
+
+Frontend
+/** srx/
+        services/ toàn bộ
+        pages/ 
+            employees.jsx
+        components/
+            ui/
+                Table.jsx
+
+
+các ile package.json ở ngoài cần thiết cho việc chạy code (backend server & frontend server chung)
