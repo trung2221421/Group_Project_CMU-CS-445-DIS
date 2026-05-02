@@ -265,7 +265,7 @@ export default function Employees() {
         >
           <option value="">Tất cả phòng ban</option>
           {filters.departments.map((dept) => (
-            <option key={dept} value={dept}>{dept}</option>
+            <option key={dept.id} value={dept.name}>{dept.name}</option>
           ))}
         </select>
 
@@ -277,7 +277,7 @@ export default function Employees() {
         >
           <option value="">Tất cả chức vụ</option>
           {filters.roles.map((role) => (
-            <option key={role} value={role}>{role}</option>
+            <option key={role.id} value={role.name}>{role.name}</option>
           ))}
         </select>
 

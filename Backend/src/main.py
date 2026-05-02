@@ -1,4 +1,3 @@
-# main.py
 import sys
 import asyncio
 
@@ -6,35 +5,27 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 sys.stdout.reconfigure(encoding='utf-8')
+
 from fastapi import FastAPI
 from src.middlewares.cors_middleware import setup_cors
-from src.modules.employees.employee_route import router as employee_router
 
-# Khởi tạo FastAPI app
+# Import cả hai router
+from src.modules.employees.employee_route import router as employees_router  # GET /, GET /filters
+from src.modules.employee.employee_route import router as employee_router   # POST /, PUT /{id}
+
 app = FastAPI(
     title="HR Management System",
     description="API cho hệ thống quản lý nhân sự",
     version="1.0.0"
 )
 
-# ✅ Setup CORS chung cho toàn bộ app
 setup_cors(app)
 
-# ✅ Setup CORS riêng cho Employee module (tùy chọn)
-# Chỉ enable nếu cần rules đặc biệt cho employee endpoints
-# setup_employee_cors(app)
+# Mount cả hai router với cùng prefix
+app.include_router(employees_router, prefix="/api/employees", tags=["Employees"])
+app.include_router(employee_router, prefix="/api/employees", tags=["Employees"])
 
-# Import và mount routers
-from src.modules.employees.employee_route import router as employee_router
-
-# Mount employee router với prefix
-app.include_router(
-    employee_router, 
-    prefix="/api/employees",
-    tags=["Employees"]
-)
-
-# Health check endpoint
+# Health check
 @app.get("/")
 async def root():
     return {
@@ -47,7 +38,6 @@ async def root():
         }
     }
 
-# Debug: In ra tất cả routes đã đăng ký
 @app.on_event("startup")
 async def startup_event():
     print("\n" + "="*50)

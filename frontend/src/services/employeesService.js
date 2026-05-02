@@ -6,7 +6,7 @@ export const getEmployees = async (dept = "", role = "") => {
   if (dept) params.append("dept", dept);
   if (role) params.append("role", role);
 
-  const url = `${API_URL}/employees${params.toString() ? "?" + params : ""}`;
+  const url = `${API_URL}/employees/${params.toString() ? "?" + params : ""}`;
 
   const res = await fetch(url);
 
