@@ -1,12 +1,4 @@
-# Python
-BackendForm/venv/
-BackendForm/src/__pycache__/
-BackendForm/src/.env
-
-# Node/React
-frontend/node_modules/
-frontend/dist/
-
-# OS rác
-.DS_Store
-Thumbs.db
+venv/ 
+node_modules/ 
+__pycache__/ 
+.env 
