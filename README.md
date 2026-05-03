@@ -1,5 +1,5 @@
-Cấu trúc chính
-
+### 📂 Cấu trúc thư mục dự án
+```text
 BackendForm/
 ├── README.md
 ├── venv/
@@ -23,10 +23,11 @@ BackendForm/
     │   │   └── dashboard_service.py (đã làm)
     │   ├── payroll/
     │   └── reports/
-    │   │   ├── reports_route.py (đã làm)
-    │   │   ├── reports_schema.py (đã làm)
-    │   │   └── reports_service.py (đã làm)
+    │       ├── reports_route.py (đã làm)
+    │       ├── reports_schema.py (đã làm)
+    │       └── reports_service.py (đã làm)
     └── utils/
+
 frontend/
 ├── index.html
 ├── README.md
