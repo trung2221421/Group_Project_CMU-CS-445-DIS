@@ -1,5 +1,6 @@
 import React from 'react';
-import { PieChart, Pie, Cell, Tooltip } from 'recharts';
+// 1. Import thêm Legend từ recharts
+import { PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
 
 export default function DonutChart({ work = 0, leave = 0, absent = 0 }) {
   // Đảm bảo dữ liệu luôn là số thực, không bị NaN
@@ -19,12 +20,14 @@ export default function DonutChart({ work = 0, leave = 0, absent = 0 }) {
   ];
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '220px' }}>
-      <PieChart width={250} height={220}>
+    // 2. Tăng chiều cao của div bao bọc lên một chút để chứa Legend (220px -> 260px)
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', height: '260px' }}>
+      {/* Tăng height của PieChart lên 260 */}
+      <PieChart width={250} height={260}>
         <Pie
           data={data}
-          cx={125} // Tọa độ tâm cố định (một nửa của width 250)
-          cy={110} // Tọa độ tâm cố định (một nửa của height 220)
+          cx={125} 
+          cy={100} // Đẩy tâm hình tròn lên cao một chút (110 -> 100) để nhường chỗ cho chữ ở dưới
           innerRadius={60}
           outerRadius={80}
           paddingAngle={total > 0 ? 5 : 0}
@@ -39,6 +42,18 @@ export default function DonutChart({ work = 0, leave = 0, absent = 0 }) {
         <Tooltip 
           formatter={(value) => total === 0 ? ['0', 'Số lượng'] : [`${value} ngày`, 'Tổng cộng']}
           contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+        />
+        
+        {/* 3. THÊM COMPONENT GHI CHÚ MÀU Ở ĐÂY */}
+        <Legend 
+          verticalAlign="bottom" // Nằm ở dưới cùng
+          align="center"         // Căn giữa
+          iconType="circle"      // Icon dạng hình tròn (thay vì hình vuông mặc định)
+          wrapperStyle={{ 
+            fontSize: '13px', 
+            fontWeight: '500',
+            paddingTop: '20px'   // Tạo khoảng cách với biểu đồ
+          }}
         />
       </PieChart>
     </div>

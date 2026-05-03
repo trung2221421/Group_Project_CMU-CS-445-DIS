@@ -12,7 +12,6 @@ import StatCard from '../components/ui/StatCard.jsx';
 import Table, { statusBadge } from '../components/ui/Table.jsx';
 import BarChart from '../components/charts/BarChart.jsx';
 import DonutChart from '../components/charts/DonutChart.jsx';
-// Thêm import cho biểu đồ phòng ban mới
 import DepartmentChart from '../components/charts/DepartmentChart.jsx'; 
 
 export default function Dashboard() {
@@ -38,8 +37,6 @@ export default function Dashboard() {
       case 'name': return row.FullName ?? row.fullName ?? row.name ?? row.Name ?? '---';
       case 'dob': return row.DateOfBirth ?? row.dob ?? row.BirthDate ?? '---';
       case 'gender': return row.Gender ?? row.gender ?? row.GioiTinh ?? '---';
-      case 'dept': return row.DepartmentName ?? row.dept_name ?? row.department ?? row.phong_ban ?? '---';
-      case 'pos': return row.PositionName ?? row.position ?? row.chuc_vu ?? '---';
       case 'salary': return row.BaseSalary ?? row.salary ?? row.base_salary ?? row.luong ?? 0;
       case 'status': return row.Status ?? row.status ?? row.trang_thai ?? 'Active';
       default: return row[field] ?? '---';
@@ -79,8 +76,28 @@ export default function Dashboard() {
   const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
   const currentRows = validRows.slice((safeCurrentPage - 1) * itemsPerPage, safeCurrentPage * itemsPerPage);
 
+  const formattedDeptData = (departmentsData || []).map(item => {
+    // 1. Nếu Backend trả về dạng mảng lồng nhau: ["Phòng IT", 10, 50]
+    if (Array.isArray(item)) {
+      return { 
+        name: item[0] || 'Chưa phân bổ', 
+        value: Number(item[2] !== undefined ? item[2] : item[1]) || 0 
+      };
+    }
+    
+    // 2. Nếu Backend trả về dạng Object nhưng sai tên Key (Ví dụ: DepartmentName, department_name...)
+    // Hàm này sẽ tự động dò tìm đúng tên phòng ban để đưa vào ghi chú (Legend) của biểu đồ
+    const deptName = item.name || item.DepartmentName || item.departmentName || item.department_name || item.department || 'Chưa phân bổ';
+    const deptValue = item.value || item.EmployeeCount || item.employeeCount || item.count || item.total || 0;
+
+    return { 
+      name: String(deptName), 
+      value: Number(deptValue) 
+    };
+  });
+
   const handleExportExcel = () => {
-    const header = ["ID", "Họ và tên", "Ngày sinh", "Giới tính", "Phòng ban", "Vị trí", "Lương cơ bản", "Trạng thái"];
+    const header = ["ID", "Họ và tên", "Ngày sinh", "Giới tính", "Lương cơ bản", "Trạng thái"];
     const csvContent = [
       header.join(","),
       ...validRows.map(r => [
@@ -88,8 +105,6 @@ export default function Dashboard() {
         `"${getValue(r, 'name')}"`,
         `"${getValue(r, 'dob')}"`,
         `"${getValue(r, 'gender')}"`,
-        `"${getValue(r, 'dept')}"`,
-        `"${getValue(r, 'pos')}"`,
         `"${getValue(r, 'salary')}"`,
         `"${getValue(r, 'status')}"`
       ].join(","))
@@ -129,7 +144,7 @@ export default function Dashboard() {
         <StatCard icon={CheckCircle2} label="Chính thức" value={stats?.fullTimeEmployees?.toString() || '0'} />
         <StatCard icon={Building2} label="Phòng ban" value={stats?.totalDepartments?.toString() || '0'} tone="orange" />
         <StatCard icon={WalletCards} label="Tổng lương" value={stats?.monthlyPayroll || '0 VND'} tone="green" />
-        <StatCard icon={CalendarCheck} label="Số vị trí" value={stats?.totalDepartments?.toString() || '0'} tone="purple" />
+        <StatCard icon={CalendarCheck} label="Số chức vụ" value={stats?.totalDepartments?.toString() || '0'} tone="purple" />
         <StatCard icon={AlertTriangle} label="Cảnh báo" value={stats?.alerts?.toString() || '0'} tone="red" danger />
       </div>
 
@@ -187,7 +202,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* CĂN PHẢI CÁC NÚT PHÂN TRANG (Dùng justify-end và sm:justify-between) */}
+        {/* CĂN PHẢI CÁC NÚT PHÂN TRANG */}
         <div className="flex items-center justify-end sm:justify-between px-6 py-4 bg-gray-50 border-t border-gray-100">
           <span className="text-sm font-medium text-gray-500 hidden sm:block">
             Hiển thị <span className="font-bold text-gray-800">{safeCurrentPage}</span> trên <span className="font-bold text-gray-800">{totalPages}</span> trang
@@ -241,14 +256,14 @@ export default function Dashboard() {
       {/* 3 KHỐI BÊN DƯỚI */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* CƠ CẤU PHÒNG BAN - ĐÃ ĐƯỢC CHUYỂN THÀNH BIỂU ĐỒ TRÒN */}
+        {/* CƠ CẤU PHÒNG BAN - ĐÃ FIX LỖI TRUYỀN DỮ LIỆU */}
         <Card className="p-6 rounded-2xl shadow-sm ring-1 ring-gray-100 border-0 flex flex-col">
           <div className="flex items-center gap-2 mb-2">
             <PieChartIcon size={20} className="text-blue-500" />
             <h2 className="text-lg font-bold text-gray-800">Cơ cấu phòng ban</h2>
           </div>
           <div className="flex-1 w-full flex items-center justify-center">
-             <DepartmentChart data={departmentsData} />
+             <DepartmentChart data={formattedDeptData} />
           </div>
         </Card>
 
@@ -260,7 +275,7 @@ export default function Dashboard() {
               <h2 className="text-lg font-bold text-gray-800">Tóm tắt điểm danh</h2>
             </div>
             
-            {/* BỘ CHỌN THÁNG / NĂM (Dạng Select dropdown) */}
+            {/* BỘ CHỌN THÁNG / NĂM */}
             <div className="flex gap-2">
               <select 
                 className="bg-gray-50 border border-gray-200 text-xs font-semibold text-gray-700 px-2 py-1.5 rounded-lg outline-none hover:border-gray-300 transition-colors cursor-pointer" 
@@ -296,7 +311,7 @@ export default function Dashboard() {
             
             <div className="grid grid-cols-3 gap-4 mt-4 w-full">
               <div className="bg-blue-50/50 p-3 rounded-xl text-center border border-blue-100">
-                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Ngày công</span>
+                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider"> Tổng ngày công</span>
                 <p className="text-blue-600 font-black text-lg mt-1">{stats?.workDays || 0}</p>
               </div>
               <div className="bg-purple-50/50 p-3 rounded-xl text-center border border-purple-100">

@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.modules.dashboard.dashboard_route import router as dashboard_router
+# BỔ SUNG: Import router của module reports
+from src.modules.reports.reports_route import router as reports_router
 
 
 app = FastAPI(title="Payroll Pro API")
@@ -16,6 +18,8 @@ app.add_middleware(
 
 # Gắn các route của hệ thống
 app.include_router(dashboard_router)
+# BỔ SUNG: Gắn router của báo cáo vào ứng dụng
+app.include_router(reports_router)
 
 @app.get("/")
 def read_root():

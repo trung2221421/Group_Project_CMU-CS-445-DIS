@@ -35,14 +35,20 @@ class DashboardService:
             )
         ).count()
 
+        # 🌟 BỔ SUNG LỚN: Quét toàn bộ bảng Department để lấy tên thật
+        all_departments = sqlserver_db.query(Department).all()
+        # Tạo từ điển biến ID thành Tên (VD: {1: "Phòng IT", 2: "Phòng Kế toán"})
+        dept_map = {dept.DepartmentID: dept.DepartmentName for dept in all_departments}
+
         # BIỂU ĐỒ PHÒNG BAN: Lấy theo số DepartmentID cho an toàn
         dept_counts = sqlserver_db.query(
             Employee.DepartmentID,
             func.count(Employee.EmployeeID)
         ).group_by(Employee.DepartmentID).all()
         
+        # FIX LỖI TÊN PHÒNG BAN CHO BIỂU ĐỒ TRÒN
         departments_data = [
-            [f"Phòng ban {dept_id}", int((count/total_employees)*100) if total_employees > 0 else 0, count]
+            [dept_map.get(dept_id, "Chưa phân bổ"), int((count/total_employees)*100) if total_employees > 0 else 0, count]
             for dept_id, count in dept_counts
         ]
 
@@ -99,10 +105,11 @@ class DashboardService:
             except AttributeError:
                 dob_str = "---"
 
-            # LẤY SỐ ID CỦA PHÒNG BAN VÀ VỊ TRÍ CỰC KỲ AN TOÀN
+            # FIX LỖI HIỂN THỊ TÊN PHÒNG BAN TRONG BẢNG
             try:
                 dept_id = emp_obj.DepartmentID
-                dept_display = f"Phòng {dept_id}" if dept_id is not None else "---"
+                # Dùng dept_map để dịch sang tên thật thay vì dùng f"Phòng {dept_id}"
+                dept_display = dept_map.get(dept_id, "---") if dept_id is not None else "---"
             except AttributeError:
                 dept_display = "---"
 
@@ -118,7 +125,6 @@ class DashboardService:
                 "dob": dob_str,
                 "gender": getattr(emp_obj, "Gender", "---") or "---",
                 
-                # HIỂN THỊ DƯỚI DẠNG "Phòng 1", "Vị trí 2"
                 "dept": dept_display,
                 "pos": pos_display,
                 
