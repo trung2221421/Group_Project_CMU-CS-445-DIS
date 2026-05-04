@@ -9,9 +9,12 @@ sys.stdout.reconfigure(encoding='utf-8')
 from fastapi import FastAPI
 from src.middlewares.cors_middleware import setup_cors
 
-# Import cả hai router
-from src.modules.employees.employee_route import router as employees_router  # GET /, GET /filters
-from src.modules.employee.employee_route import router as employee_router   # POST /, PUT /{id}
+# Import cả hai router cho employees
+from src.modules.employees.employee_route import router as employees_router
+from src.modules.employee.employee_route import router as employee_router
+
+# Import router Reports
+from src.modules.Reports.reports_route import router as reports_router   # <--- THÊM DÒNG NÀY
 
 app = FastAPI(
     title="HR Management System",
@@ -21,9 +24,10 @@ app = FastAPI(
 
 setup_cors(app)
 
-# Mount cả hai router với cùng prefix
+# Mount các router
 app.include_router(employees_router, prefix="/api/employees", tags=["Employees"])
 app.include_router(employee_router, prefix="/api/employees", tags=["Employees"])
+app.include_router(reports_router)   # <--- THÊM DÒNG NÀY (prefix đã có trong router)
 
 # Health check
 @app.get("/")
@@ -34,7 +38,8 @@ async def root():
         "docs": "/docs",
         "endpoints": {
             "employees": "/api/employees",
-            "employee_filters": "/api/employees/filters"
+            "employee_filters": "/api/employees/filters",
+            "reports_monthly": "/api/v1/reports/monthly"   # thêm cho rõ
         }
     }
 
@@ -49,4 +54,3 @@ async def startup_event():
             methods = ", ".join(route.methods)
             print(f"   {methods:20} {route.path}")
     print("\n" + "="*50 + "\n")
-

@@ -44,6 +44,7 @@ def setup_cors(app: FastAPI) -> None:
             "X-Requested-With",
             "Access-Control-Request-Method",
             "Access-Control-Request-Headers",
+            "X-User",
         ],
         expose_headers=[
             "Content-Length",

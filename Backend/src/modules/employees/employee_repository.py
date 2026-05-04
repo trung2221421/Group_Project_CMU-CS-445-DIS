@@ -12,7 +12,12 @@ def get_human_data():
             e.email,
             e.PhoneNumber as phone,
             d.DepartmentName as dept,
-            p.PositionName as role
+            p.PositionName as role,
+            e.DepartmentID as department_id,
+            e.PositionID as position_id,
+            e.DateOfBirth as date_of_birth,
+            e.Gender as gender,
+            e.HireDate as hire_date
         FROM employees e
         JOIN Departments d ON e.DepartmentID = d.DepartmentID
         JOIN Positions p ON e.PositionID = p.PositionID""")
@@ -68,5 +73,36 @@ def get_roles():
         cursor.execute("SELECT PositionID, PositionName FROM Positions")
         rows = cursor.fetchall()
         return [{"id": row[0], "name": row[1]} for row in rows]
+    finally:
+        conn.close()
+# Thêm vào cuối file
+def get_employee_payroll_info(emp_id: int):
+    conn = get_mysql_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM employees_payroll WHERE EmployeeID = %s", (emp_id,))
+        return cursor.fetchone()  # dict hoặc None
+    finally:
+        conn.close()
+
+def delete_human_employee(emp_id: int):
+    conn = get_sqlserver_connection()
+    try:
+        cursor = conn.cursor()
+        # Xóa các ràng buộc liên quan (Dividends, ...) trước nếu có
+        cursor.execute("DELETE FROM Dividends WHERE EmployeeID = ?", (emp_id,))
+        cursor.execute("DELETE FROM employees WHERE EmployeeID = ?", (emp_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+def delete_payroll_employee(emp_id: int):
+    conn = get_mysql_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM employees_payroll WHERE EmployeeID = %s", (emp_id,))
+        # Nếu có bảng salaries liên quan, có thể xóa luôn
+        cursor.execute("DELETE FROM salaries WHERE EmployeeID = %s", (emp_id,))
+        conn.commit()
     finally:
         conn.close()

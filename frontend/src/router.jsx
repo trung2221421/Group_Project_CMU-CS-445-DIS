@@ -19,6 +19,7 @@ export const router = createBrowserRouter([
   { path: '/dashboard', element: <Dashboard /> },
   { path: '/employees', element: <Employees /> },
   { path: '/employees/new', element: <EmployeeFormPage /> },
+  { path: '/employees/:id/edit', element: <EmployeeFormPage /> }, // <-- thêm dòng này
   { path: '/departments', element: <Departments /> },
   { path: '/payroll', element: <Payroll /> },
   { path: '/attendance', element: <Attendance /> },

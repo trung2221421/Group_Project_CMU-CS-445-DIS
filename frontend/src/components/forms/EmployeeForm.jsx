@@ -23,15 +23,41 @@ export default function EmployeeForm({ employeeData, onSubmit, isEdit = false })
     hire_date: '',
     department_id: '',
     position_id: '',
-    status: 'Đang làm việc',   // giá trị mặc định
+    status: 'Đang làm việc',
     sync_to_payroll: true,
-    ...employeeData,           // ghi đè nếu có employeeData (chỉnh sửa)
   });
 
   const [departments, setDepartments] = useState([]);
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // ✅ Đồng bộ dữ liệu khi employeeData thay đổi (chỉnh sửa / thêm mới)
+  useEffect(() => {
+    if (employeeData && Object.keys(employeeData).length > 0) {
+      setForm(prev => ({
+        ...prev,
+        ...employeeData,
+        // Đảm bảo các trường số không bị null
+        department_id: employeeData.department_id ?? '',
+        position_id: employeeData.position_id ?? '',
+      }));
+    } else {
+      // Reset form khi thêm mới
+      setForm({
+        name: '',
+        phone: '',
+        date_of_birth: '',
+        gender: '',
+        email: '',
+        hire_date: '',
+        department_id: '',
+        position_id: '',
+        status: 'Đang làm việc',
+        sync_to_payroll: true,
+      });
+    }
+  }, [employeeData]);
 
   useEffect(() => {
     getFilters()
@@ -153,7 +179,6 @@ export default function EmployeeForm({ employeeData, onSubmit, isEdit = false })
               {renderOptions(positions)}
             </select>
           </label>
-          {/* Thêm dropdown Trạng thái */}
           <label>
             <span>Trạng thái</span>
             <select name="status" value={form.status} onChange={handleChange}>

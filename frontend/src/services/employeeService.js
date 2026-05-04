@@ -1,15 +1,14 @@
-// src/services/employeeService.js
+import { CURRENT_USER } from './config.js';
+
 const API_URL = "http://localhost:8000/api";
 
-/**
- * Tạo mới nhân viên
- * @param {Object} employeeData - Dữ liệu nhân viên theo schema
- * @returns {Promise<Object>} - Phản hồi từ server (thường chứa id và message)
- */
 export const createEmployee = async (employeeData) => {
   const res = await fetch(`${API_URL}/employees`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User': CURRENT_USER,
+    },
     body: JSON.stringify(employeeData),
   });
   if (!res.ok) {
@@ -19,16 +18,13 @@ export const createEmployee = async (employeeData) => {
   return res.json();
 };
 
-/**
- * Cập nhật thông tin nhân viên
- * @param {number|string} id - ID nhân viên
- * @param {Object} employeeData - Dữ liệu cập nhật (chỉ gửi các trường thay đổi)
- * @returns {Promise<Object>} - Phản hồi từ server
- */
 export const updateEmployee = async (id, employeeData) => {
   const res = await fetch(`${API_URL}/employees/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User': CURRENT_USER,
+    },
     body: JSON.stringify(employeeData),
   });
   if (!res.ok) {
@@ -38,16 +34,26 @@ export const updateEmployee = async (id, employeeData) => {
   return res.json();
 };
 
-/**
- * Lấy thông tin chi tiết một nhân viên (nếu cần)
- * @param {number|string} id
- * @returns {Promise<Object>}
- */
 export const getEmployeeById = async (id) => {
-  const res = await fetch(`${API_URL}/employees/${id}`);
+  const res = await fetch(`${API_URL}/employees/${id}`, {
+    headers: { 'X-User': CURRENT_USER }
+  });
   if (!res.ok) {
     const error = await res.json();
     throw new Error(error.detail || 'Không tìm thấy nhân viên');
   }
   return res.json();
 };
+export const deleteEmployee = async (id) => {
+  const res = await fetch(`${API_URL}/employees/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'X-User': CURRENT_USER,
+    },
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || 'Xóa thất bại');
+  }
+  return res.json();
+}

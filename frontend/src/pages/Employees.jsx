@@ -1,6 +1,7 @@
 // src/pages/employees.jsx
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
+  Edit2, Trash2, FileText,
   Filter, Plus, Search, RefreshCw, AlertCircle, Users, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
@@ -9,6 +10,7 @@ import MainLayout from '../layout/MainLayout.jsx';
 import Card from '../components/ui/Card.jsx';
 import Table from '../components/ui/Table.jsx';
 import { getEmployees, getFilters } from '../services/employeesService.js';
+import { deleteEmployee } from '../services/employeeService'; // thêm dòng này
 
 // ========================
 // Custom Hook: useEmployees
@@ -125,12 +127,14 @@ export default function Employees() {
     loadInitialData,
   } = useEmployees();
 
+  const navigate = useNavigate();
+
   // Local UI state
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedEmployee, setSelectedEmployee] = useState(null); // Thêm state này
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // Reset page về 1 khi dữ liệu đầu vào thay đổi (filter, search)
   useEffect(() => {
@@ -143,6 +147,7 @@ export default function Employees() {
       return;
     }
     loadEmployees(selectedDept, selectedRole);
+    setSelectedEmployee(null); // đóng panel khi filter
   }, [selectedDept, selectedRole, currentFilter, loadEmployees]);
 
   const handleReset = useCallback(() => {
@@ -189,6 +194,22 @@ export default function Employees() {
   const handleCloseDetail = useCallback(() => {
     setSelectedEmployee(null);
   }, []);
+
+  // ✅ Xóa nhân viên với phân quyền
+  const handleDeleteEmployee = async () => {
+    if (!selectedEmployee) return;
+    if (!window.confirm(`Bạn có chắc muốn xóa nhân viên ${selectedEmployee.name}?`)) return;
+
+    try {
+      await deleteEmployee(selectedEmployee.id);
+      alert('Xóa thành công!');
+      setSelectedEmployee(null);
+      // Tải lại danh sách với filter hiện tại
+      loadEmployees(selectedDept, selectedRole);
+    } catch (err) {
+      alert(err.message); // hiển thị lỗi (403, 500,...)
+    }
+  };
 
   // Render cell
   const renderEmployeeCell = useCallback((row, column) => {
@@ -395,7 +416,7 @@ export default function Employees() {
                 striped
                 hoverable
                 emptyMessage="Không có dữ liệu"
-                onRowClick={handleRowClick}  // <-- Thêm prop onRowClick
+                onRowClick={handleRowClick}
               />
 
               {/* Phân trang */}
@@ -426,7 +447,7 @@ export default function Employees() {
           )}
         </Card>
 
-        {/* Panel chi tiết nhân viên - chỉ hiển thị khi selectedEmployee khác null */}
+        {/* Panel chi tiết nhân viên */}
         {selectedEmployee && (
           <Card className="detail-panel">
             <button className="close" onClick={handleCloseDetail}>×</button>
@@ -436,15 +457,15 @@ export default function Employees() {
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
-                width: '80px',          // kích thước khung vuông
+                width: '80px',
                 height: '80px',
-                borderRadius: '50%',    // biến thành hình tròn
-                background: '#f0f2f5',  // màu nền nhạt
-                margin: '0 auto 16px',  // căn giữa và cách dưới 16px
-                fontSize: '36px',       // cỡ chữ cho emoji
+                borderRadius: '50%',
+                background: '#f0f2f5',
+                margin: '0 auto 16px',
+                fontSize: '36px',
               }}
             >
-              <span role="img" aria-label="avatar" style={{ alignItems: 'center' , justifyContent: 'center', display: 'flex', margin: "90px 32px 28px 40px" }}>👨🏻‍💼</span>
+              <span role="img" aria-label="avatar">👨🏻‍💼</span>
             </div>
             <h2>{selectedEmployee.name}</h2>
             <p className="blue">{selectedEmployee.role || 'Chưa có chức vụ'}</p>
@@ -466,7 +487,26 @@ export default function Employees() {
               </div>
             </div>
 
-            <button className="btn primary full">Xuất báo cáo</button>
+            {/* Các nút hành động */}
+            <div className="detail-actions" style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+              <button
+                className="btn primary"
+                onClick={() => navigate(`/employees/${selectedEmployee.id}/edit`)}
+                style={{ flex: 1 }}
+              >
+                <Edit2 size={17} /> Chỉnh sửa
+              </button>
+              <button
+                className="btn danger"
+                onClick={handleDeleteEmployee}
+                style={{ flex: 1 }}
+              >
+                <Trash2 size={17} /> Xóa
+              </button>
+            </div>
+            <button className="btn primary full" style={{ marginTop: '12px' }}>
+              <FileText size={17} /> Xuất báo cáo
+            </button>
           </Card>
         )}
       </div>

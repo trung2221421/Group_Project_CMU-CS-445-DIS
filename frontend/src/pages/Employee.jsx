@@ -1,11 +1,11 @@
-// src/pages/EmployeeFormPage.jsx (hoặc Employee.jsx)
+// src/pages/Employee.jsx
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FileUp, X, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MainLayout from '../layout/MainLayout.jsx';
 import EmployeeForm, { EmployeeExtraCards } from '../components/forms/EmployeeForm.jsx';
-import { createEmployee, updateEmployee } from '../services/employeeService';
+import { createEmployee, updateEmployee, getEmployeeById } from '../services/employeeService';
 
 const formatDate = (value) => {
   if (!value) return '';
@@ -27,6 +27,21 @@ export default function EmployeeFormPage() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
   const fileInputRef = useRef(null);
+  const [employee, setEmployee] = useState(null);
+
+  // Khi có id (chỉnh sửa), tải dữ liệu nhân viên
+  useEffect(() => {
+    if (id) {
+      getEmployeeById(id)
+        .then(data => setEmployee(data))
+        .catch(err => {
+          console.error('Lỗi tải nhân viên:', err);
+          setEmployee(null);
+        });
+    } else {
+      setEmployee(null); // Reset khi thêm mới
+    }
+  }, [id]);
 
   const handleSubmit = async (formData) => {
     if (id) {
@@ -126,7 +141,7 @@ export default function EmployeeFormPage() {
         </div>
       )}
 
-      <EmployeeForm onSubmit={handleSubmit} isEdit={!!id} />
+      <EmployeeForm employeeData={employee || {}} onSubmit={handleSubmit} isEdit={!!id} />
 
       {!id && <EmployeeExtraCards />}
     </MainLayout>
