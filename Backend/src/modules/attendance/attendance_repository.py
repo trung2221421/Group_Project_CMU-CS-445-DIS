@@ -128,3 +128,91 @@ class AttendanceRepository:
                 LIMIT %s
             """, (employee_id, employee_id, months))
             return cursor.fetchall()
+
+    # === CÁC HÀM MỚI ===
+
+    def get_company_attendance_trend(self, months: int, reference_month: str):
+        query = """
+            SELECT 
+                DATE_FORMAT(a.AttendanceMonth, '%%Y-%%m') AS Month,
+                SUM(a.WorkDays) AS TotalWorkDays,
+                COUNT(DISTINCT a.EmployeeID) AS EmployeeCount
+            FROM attendance a
+            WHERE a.AttendanceID IN (
+                SELECT MAX(AttendanceID)
+                FROM attendance
+                GROUP BY EmployeeID, DATE(AttendanceMonth)
+            )
+            AND DATE_FORMAT(a.AttendanceMonth, '%%Y-%%m') <= %s
+            GROUP BY Month
+            ORDER BY Month DESC
+            LIMIT %s
+        """
+        with self.conn.cursor() as cursor:
+            cursor.execute(query, (reference_month, months))
+            return cursor.fetchall()
+
+    def get_department_attendance_trend(self, months: int, reference_month: str, department_name: str):
+        query = """
+            SELECT 
+                DATE_FORMAT(a.AttendanceMonth, '%%Y-%%m') AS Month,
+                SUM(a.WorkDays) AS TotalWorkDays,
+                COUNT(DISTINCT a.EmployeeID) AS EmployeeCount
+            FROM attendance a
+            JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
+            LEFT JOIN departments_payroll d ON e.DepartmentID = d.DepartmentID
+            WHERE a.AttendanceID IN (
+                SELECT MAX(AttendanceID)
+                FROM attendance
+                GROUP BY EmployeeID, DATE(AttendanceMonth)
+            )
+            AND d.DepartmentName = %s
+            AND DATE_FORMAT(a.AttendanceMonth, '%%Y-%%m') <= %s
+            GROUP BY Month
+            ORDER BY Month DESC
+            LIMIT %s
+        """
+        with self.conn.cursor() as cursor:
+            cursor.execute(query, (department_name, reference_month, months))
+            return cursor.fetchall()
+
+    def get_attendance_for_export_all(self, month: str):
+        with self.conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT e.EmployeeID, e.FullName, d.DepartmentName,
+                       a.WorkDays, a.LeaveDays, a.AbsentDays,
+                       DATE_FORMAT(a.AttendanceMonth, '%%Y-%%m') as AttendanceMonth
+                FROM attendance a
+                JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
+                LEFT JOIN departments_payroll d ON e.DepartmentID = d.DepartmentID
+                WHERE DATE_FORMAT(a.AttendanceMonth, '%%Y-%%m') = %s
+                  AND a.AttendanceID = (
+                      SELECT MAX(AttendanceID)
+                      FROM attendance
+                      WHERE EmployeeID = a.EmployeeID
+                        AND DATE_FORMAT(AttendanceMonth, '%%Y-%%m') = %s
+                  )
+                ORDER BY d.DepartmentName, e.EmployeeID
+            """, (month, month))
+            return cursor.fetchall()
+
+    def get_attendance_for_export_department(self, month: str, department_name: str):
+        with self.conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT e.EmployeeID, e.FullName, d.DepartmentName,
+                       a.WorkDays, a.LeaveDays, a.AbsentDays,
+                       DATE_FORMAT(a.AttendanceMonth, '%%Y-%%m') as AttendanceMonth
+                FROM attendance a
+                JOIN employees_payroll e ON a.EmployeeID = e.EmployeeID
+                LEFT JOIN departments_payroll d ON e.DepartmentID = d.DepartmentID
+                WHERE DATE_FORMAT(a.AttendanceMonth, '%%Y-%%m') = %s
+                  AND d.DepartmentName = %s
+                  AND a.AttendanceID = (
+                      SELECT MAX(AttendanceID)
+                      FROM attendance
+                      WHERE EmployeeID = a.EmployeeID
+                        AND DATE_FORMAT(AttendanceMonth, '%%Y-%%m') = %s
+                  )
+                ORDER BY e.EmployeeID
+            """, (month, department_name, month))
+            return cursor.fetchall()

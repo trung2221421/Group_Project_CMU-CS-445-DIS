@@ -54,24 +54,18 @@ class PayrollService:
         output.seek(0)
         return output
 
-    # MỚI: Xuất báo cáo tổng hợp kết hợp điểm danh + lương
     def export_full_employee_report(self, employee_id: int, month: str):
-        # Lấy thông tin nhân viên
         info = self.repo.get_employee_info(employee_id)
         if not info:
             raise HTTPException(404, "Employee not found")
         full_name = info['FullName']
 
-        # Lấy toàn bộ lịch sử lương (đã loại bỏ trùng)
         salary_data = self.repo.get_employee_salary_history_for_export(employee_id)
-        # Lấy toàn bộ điểm danh
         attendance_data = self.repo.get_attendance_history(employee_id)
 
-        # Chuyển sang DataFrame
         df_sal = pd.DataFrame(salary_data) if salary_data else pd.DataFrame()
         df_att = pd.DataFrame(attendance_data) if attendance_data else pd.DataFrame()
 
-        # Chuẩn hóa tên cột
         if not df_sal.empty:
             df_sal = df_sal.rename(columns={
                 'SalaryMonth': 'Tháng',
@@ -91,7 +85,6 @@ class PayrollService:
             })
             df_att = df_att[['Tháng', 'Ngày làm', 'Ngày nghỉ', 'Vắng']]
 
-        # Merge hai DataFrame theo 'Tháng' (outer join để lấy tất cả tháng)
         if not df_sal.empty and not df_att.empty:
             merged = pd.merge(df_sal, df_att, on='Tháng', how='outer')
         elif not df_sal.empty:
@@ -106,39 +99,26 @@ class PayrollService:
             merged['Khấu trừ'] = ''
             merged['Thực nhận'] = ''
         else:
-            # Không có dữ liệu nào
             merged = pd.DataFrame(columns=[
                 'Họ tên', 'Tháng', 'Ngày làm', 'Ngày nghỉ', 'Vắng',
                 'Lương cơ bản', 'Thưởng', 'Khấu trừ', 'Thực nhận'
             ])
 
-        # Thêm cột Họ tên
         merged.insert(0, 'Họ tên', full_name)
-
-        # Sắp xếp cột theo thứ tự mong muốn
         merged = merged[[
             'Họ tên', 'Tháng',
             'Ngày làm', 'Ngày nghỉ', 'Vắng',
             'Lương cơ bản', 'Thưởng', 'Khấu trừ', 'Thực nhận'
         ]]
-
-        # Sắp xếp theo Tháng tăng dần
         merged = merged.sort_values('Tháng')
 
-        # Ghi ra file Excel
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             merged.to_excel(writer, sheet_name='Chi tiết tổng hợp', index=False)
-
         output.seek(0)
         return output
-    def __init__(self, repo):
-        self.repo = repo
 
-    # Các hàm cũ giữ nguyên (không liệt kê lại)
-    # ...
-
-    # Thêm các hàm mới:
+    # Các hàm mới
     def get_departments(self):
         data = self.repo.get_all_departments()
         if not data:
@@ -156,3 +136,51 @@ class PayrollService:
     def delete_employee_data(self, employee_id: int):
         self.repo.delete_employee_payroll_data(employee_id)
         return {"message": "Đã xoá dữ liệu nhân viên"}
+
+    # Tổng lương 6 tháng (toàn công ty hoặc phòng ban)
+    def get_salary_trend(self, months: int, reference_month: str, department_name: Optional[str] = None):
+        rows = self.repo.get_salary_trend(months, reference_month, department_name)
+        if not rows:
+            return []
+
+        sorted_rows = sorted(rows, key=lambda x: x['Month'])
+        recent = sorted_rows[-months:]
+
+        results = []
+        for row in recent:
+            existing = next((r for r in results if r['Month'] == row['Month']), None)
+            if existing:
+                existing['TotalNet'] += row['NetSalary']
+            else:
+                results.append({'Month': row['Month'], 'TotalNet': row['NetSalary']})
+
+        results = sorted(results, key=lambda x: x['Month'])
+        return results
+
+    # Xuất Excel toàn bộ nhân viên trong tháng
+    def export_all_employees_excel(self, month: str):
+        data = self.repo.get_all_salaries_for_export(month)
+        if not data:
+            raise HTTPException(404, "No salary data for this month")
+        df = pd.DataFrame(data)
+        df = df[['EmployeeID', 'FullName', 'DepartmentName', 'BaseSalary', 'Bonus', 'Deductions', 'NetSalary', 'SalaryMonth']]
+        df.columns = ['Mã NV', 'Họ tên', 'Phòng ban', 'Lương cơ bản', 'Thưởng', 'Khấu trừ', 'Thực nhận', 'Tháng']
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Toàn công ty', index=False)
+        output.seek(0)
+        return output
+
+    # Xuất Excel phòng ban trong tháng
+    def export_by_department_excel(self, month: str, department_name: str):
+        data = self.repo.get_salaries_by_department_for_export(month, department_name)
+        if not data:
+            raise HTTPException(404, "No salary data for this department in the month")
+        df = pd.DataFrame(data)
+        df = df[['EmployeeID', 'FullName', 'DepartmentName', 'BaseSalary', 'Bonus', 'Deductions', 'NetSalary', 'SalaryMonth']]
+        df.columns = ['Mã NV', 'Họ tên', 'Phòng ban', 'Lương cơ bản', 'Thưởng', 'Khấu trừ', 'Thực nhận', 'Tháng']
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name=department_name[:31], index=False)
+        output.seek(0)
+        return output

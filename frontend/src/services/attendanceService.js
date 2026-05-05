@@ -34,3 +34,31 @@ export const getEmployeeAttendanceHistory = async (employeeId, months = 6) => {
   if (!res.ok) throw new Error('No attendance history');
   return res.json();
 };
+
+// Lấy xu hướng chuyên cần toàn công ty (6 tháng)
+export const getCompanyAttendanceTrend = async (months = 6, referenceMonth) => {
+  const params = new URLSearchParams({ months, reference_month: referenceMonth });
+  const res = await fetch(`/api/attendance/company-trend?${params.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch company trend');
+  return res.json();
+};
+
+// Lấy xu hướng chuyên cần theo phòng ban (6 tháng)
+export const getDepartmentAttendanceTrend = async (months = 6, referenceMonth, departmentName) => {
+  const params = new URLSearchParams({ months, reference_month: referenceMonth, department_name: departmentName });
+  const res = await fetch(`/api/attendance/department-trend?${params.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch department trend');
+  return res.json();
+};
+
+// Xuất toàn bộ điểm danh công ty theo tháng
+export const exportAllAttendanceExcel = (month) => {
+  const url = `/api/attendance/export-all?month=${encodeURIComponent(month)}`;
+  window.open(url, '_blank');
+};
+
+// Xuất điểm danh phòng ban theo tháng
+export const exportDepartmentAttendanceExcel = (month, departmentName) => {
+  const url = `/api/attendance/export-department?month=${encodeURIComponent(month)}&department_name=${encodeURIComponent(departmentName)}`;
+  window.open(url, '_blank');
+};

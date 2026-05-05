@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Download, Filter, Edit, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Download, Filter, Edit, Trash2, ChevronDown } from 'lucide-react';
 import MainLayout from '../layout/MainLayout.jsx';
 import Card from '../components/ui/Card.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
-import BarChart from '../components/charts/BarChart.jsx';
 import {
   getSalaryHistory,
   getAttendance,
@@ -11,7 +10,10 @@ import {
   exportFullEmployeeReport,
   getDepartments,
   updateSalary,
-  deleteEmployee
+  deleteEmployee,
+  getSalaryTrend,
+  exportAllEmployeesExcel,
+  exportByDepartmentExcel,
 } from '../services/payrollService';
 
 export default function Payroll() {
@@ -30,7 +32,7 @@ export default function Payroll() {
   const [attendance, setAttendance] = useState(null);
   const [departments, setDepartments] = useState([]);
 
-  // State cho popup sửa
+  // Popup sửa
   const [showEditPopup, setShowEditPopup] = useState(false);
   const [editData, setEditData] = useState({
     department_name: '',
@@ -38,6 +40,24 @@ export default function Payroll() {
     bonus: 0,
     deductions: 0
   });
+
+  // Dropdown xuất báo cáo
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef(null);
+
+  // Dữ liệu tổng lương 6 tháng từ API
+  const [trendData, setTrendData] = useState([]);
+
+  // Đóng menu xuất khi click bên ngoài
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchSalaryList = async (month, deptName) => {
     setLoading(true);
@@ -76,10 +96,26 @@ export default function Payroll() {
     }
   };
 
+  const fetchTrend = async () => {
+    try {
+      const data = await getSalaryTrend(6, selectedMonth, departmentName);
+      setTrendData(data || []);
+    } catch (err) {
+      console.error('Lỗi trend:', err);
+      setTrendData([]);
+    }
+  };
+
   useEffect(() => {
     fetchSalaryList(selectedMonth, '');
     loadDepartments();
   }, []);
+
+  useEffect(() => {
+    if (!selectedEmployeeId) {
+      fetchTrend();
+    }
+  }, [selectedMonth, departmentName, selectedEmployeeId]);
 
   const handleFilter = () => {
     fetchSalaryList(selectedMonth, departmentName);
@@ -92,15 +128,31 @@ export default function Payroll() {
     fetchEmployeeDetail(row.EmployeeID);
   };
 
-  const handleExport = () => {
+  // --- Xuất báo cáo ---
+  const handleExportAll = () => {
+    exportAllEmployeesExcel(selectedMonth);
+    setShowExportMenu(false);
+  };
+
+  const handleExportDepartment = () => {
+    if (!departmentName) {
+      alert('Vui lòng chọn một phòng ban trước khi xuất.');
+      return;
+    }
+    exportByDepartmentExcel(selectedMonth, departmentName);
+    setShowExportMenu(false);
+  };
+
+  const handleExportSelected = () => {
     if (!selectedEmployeeId) {
       alert('Vui lòng chọn nhân viên trước khi xuất báo cáo.');
       return;
     }
     exportFullEmployeeReport(selectedEmployeeId, selectedMonth);
+    setShowExportMenu(false);
   };
 
-  // Mở popup sửa
+  // --- Sửa ---
   const handleEditClick = () => {
     if (!selectedEmployeeId) {
       alert('Chọn nhân viên trước.');
@@ -120,7 +172,6 @@ export default function Payroll() {
     setShowEditPopup(true);
   };
 
-  // Xử lý lưu sửa
   const handleSaveEdit = async () => {
     try {
       await updateSalary({
@@ -140,13 +191,13 @@ export default function Payroll() {
     }
   };
 
-  // Xác nhận xoá
+  // --- Xóa ---
   const handleDeleteClick = () => {
     if (!selectedEmployeeId) {
       alert('Chọn nhân viên trước.');
       return;
     }
-    if (window.confirm('Bạn có chắc chắn muốn xoá toàn bộ dữ liệu của nhân viên này trong hệ thống Payroll? Hành động này không thể hoàn tác.')) {
+    if (window.confirm('Bạn có chắc chắn muốn xoá toàn bộ dữ liệu của nhân viên này?')) {
       deleteEmployee(selectedEmployeeId)
         .then(() => {
           alert('Đã xoá.');
@@ -184,46 +235,81 @@ export default function Payroll() {
   const totalDeduct = filteredList.reduce((s, r) => s + r.Deductions, 0);
   const totalNet = filteredList.reduce((s, r) => s + r.NetSalary, 0);
 
-  // Chuẩn bị dữ liệu biểu đồ 6 tháng, tháng trống = 0
-  const months = [];
+  // --- Dữ liệu biểu đồ ---
+  const monthsForChart = [];
   const [year, monthNum] = selectedMonth.split('-').map(Number);
-  for (let i = 0; i < 6; i++) {
+  for (let i = 5; i >= 0; i--) {
     const d = new Date(year, monthNum - 1 - i, 1);
     const label = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    months.unshift(label);
+    monthsForChart.push(label);
   }
-  const salaryByMonth = {};
-  history.forEach(item => {
-    salaryByMonth[item.SalaryMonth] = item.NetSalary;
-  });
-  const chartData = months.map(m => (salaryByMonth[m] || 0) / 1_000_000);
 
-  // Lương 6 tháng gần nhất (chỉ những tháng có dữ liệu)
+  let chartData = [];
+  if (selectedEmployeeId) {
+    // Cá nhân
+    const salaryByMonth = {};
+    history.forEach(item => { salaryByMonth[item.SalaryMonth] = item.NetSalary; });
+    chartData = monthsForChart.map(m => (salaryByMonth[m] || 0) / 1_000_000);
+  } else {
+    // Tổng quan (toàn công ty hoặc phòng ban)
+    if (trendData.length > 0) {
+      const trendByMonth = {};
+      trendData.forEach(item => { trendByMonth[item.Month] = item.TotalNet; });
+      chartData = monthsForChart.map(m => (trendByMonth[m] || 0) / 1_000_000);
+    } else {
+      // Fallback: dùng tổng từ bảng hiện tại
+      const fallbackTotal = salaryList.reduce((sum, r) => sum + r.NetSalary, 0) / 1_000_000;
+      chartData = monthsForChart.map(m => (m === selectedMonth ? fallbackTotal : 0));
+    }
+  }
+
   const recentSalaries = history.slice(0, 6);
 
+  // --- Biểu đồ cột ---
+  // Hàm render biểu đồ cột (đã sửa lỗi không hiển thị)
+const renderBarChart = (data, months) => {
+  const maxVal = Math.max(...data, 1);
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: '12px', height: '220px', marginTop: '12px' }}>
+      {data.length > 0 ? (
+        data.map((val, idx) => {
+          const heightPercent = (val / maxVal) * 100;
+          return (
+            <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '40px', height: '100%', justifyContent: 'flex-end' }}>
+              <div style={{
+                height: `${Math.max(heightPercent, 10)}%`,
+                width: '100%',
+                backgroundColor: val > 0 ? '#1e3a8a' : '#e0f2fe',
+                borderRadius: '4px 4px 0 0',
+                border: val === 0 ? '1px solid #b0c4de' : 'none',
+                transition: 'height 0.3s'
+              }} />
+              <span style={{ fontSize: '11px', marginTop: '6px', color: '#555' }}>
+                {months[idx]?.slice(2) || ''}
+              </span>
+            </div>
+          );
+        })
+      ) : (
+        <p style={{ color: '#999' }}>Không có dữ liệu</p>
+      )}
+    </div>
+  );
+};
   return (
     <MainLayout title="Quản lý lương & Payroll">
       <div className="split payroll-split">
         <div className="stack">
-          {/* ====== THANH CÔNG CỤ DẠNG CỘT ====== */}
+          {/* Thanh công cụ */}
           <Card style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span>CHỌN THÁNG</span>
-                <input
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  style={{ width: '100%' }}
-                />
+                <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} style={{ width: '100%' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span>PHÒNG BAN</span>
-                <select
-                  value={departmentName}
-                  onChange={(e) => setDepartmentName(e.target.value)}
-                  style={{ width: '100%' }}
-                >
+                <select value={departmentName} onChange={(e) => setDepartmentName(e.target.value)} style={{ width: '100%' }}>
                   <option value="">Tất cả phòng ban</option>
                   {departments.map((dept, i) => (
                     <option key={i} value={dept.DepartmentName}>{dept.DepartmentName}</option>
@@ -232,21 +318,50 @@ export default function Payroll() {
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span>TÌM KIẾM NHÂN VIÊN</span>
-                <input
-                  placeholder="Nhập tên nhân viên..."
-                  value={searchName}
-                  onChange={(e) => setSearchName(e.target.value)}
-                  style={{ width: '100%' }}
-                />
+                <input placeholder="Nhập tên nhân viên..." value={searchName} onChange={(e) => setSearchName(e.target.value)} style={{ width: '100%' }} />
               </label>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button className="btn primary" style={{ width: '100%' }} onClick={handleFilter}>
                 <Filter /> Lọc dữ liệu
               </button>
-              <button className="btn blue" style={{ width: '100%' }} onClick={handleExport}>
-                <Download /> Xuất báo cáo
-              </button>
+              {/* Dropdown Xuất báo cáo */}
+              <div style={{ position: 'relative' }} ref={exportMenuRef}>
+                <button
+                  className="btn blue"
+                  style={{ width: '100%', justifyContent: 'space-between' }}
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Download size={16} /> Xuất báo cáo
+                  </span>
+                  <ChevronDown size={16} />
+                </button>
+                {showExportMenu && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    background: 'white',
+                    border: '1px solid #cdd4e5',
+                    borderRadius: '9px',
+                    boxShadow: '0 10px 28px rgba(31,41,55,.08)',
+                    zIndex: 100,
+                    marginTop: '4px'
+                  }}>
+                    <button className="btn ghost" style={{ width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: '9px 9px 0 0' }} onClick={handleExportAll}>
+                      Toàn bộ công ty
+                    </button>
+                    <button className="btn ghost" style={{ width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: 0 }} onClick={handleExportDepartment}>
+                      Phòng ban đã chọn
+                    </button>
+                    <button className="btn ghost" style={{ width: '100%', justifyContent: 'flex-start', border: 'none', borderRadius: '0 0 9px 9px' }} onClick={handleExportSelected}>
+                      Nhân viên đã chọn
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
 
@@ -287,7 +402,7 @@ export default function Payroll() {
           </Card>
         </div>
 
-        {/* Sidebar chi tiết nhân viên */}
+        {/* Sidebar chi tiết */}
         <Card className="side-history">
           {selectedEmployeeId ? (
             <>
@@ -301,7 +416,7 @@ export default function Payroll() {
               </div>
 
               <h4>Xu hướng 6 tháng gần nhất</h4>
-              <BarChart values={chartData} />
+              {renderBarChart(chartData, monthsForChart)}
 
               <h4>Điểm danh tháng {selectedMonth}</h4>
               <div className="attendance-box">
@@ -330,7 +445,13 @@ export default function Payroll() {
               </div>
             </>
           ) : (
-            <p>Click vào một nhân viên trong bảng để xem chi tiết</p>
+            <>
+              <h2>Tổng quan lương</h2>
+              <p>{departmentName ? `Phòng ${departmentName}` : 'Toàn công ty'}</p>
+              <h4>Xu hướng 6 tháng gần nhất</h4>
+              {renderBarChart(chartData, monthsForChart)}
+              <p>Chọn một nhân viên trong bảng để xem chi tiết.</p>
+            </>
           )}
         </Card>
       </div>

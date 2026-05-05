@@ -170,3 +170,71 @@ class PayrollRepository:
             cursor.execute("DELETE FROM attendance WHERE EmployeeID = %s", (employee_id,))
             cursor.execute("DELETE FROM employees_payroll WHERE EmployeeID = %s", (employee_id,))
             self.conn.commit()
+
+    # API lấy dữ liệu thô cho xu hướng lương
+    def get_salary_trend(self, months: int, reference_month: str, department_name: Optional[str] = None):
+        query = """
+            SELECT DATE_FORMAT(s.SalaryMonth, '%%Y-%%m') AS Month,
+                   s.NetSalary
+            FROM salaries s
+            JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+            LEFT JOIN departments_payroll d ON e.DepartmentID = d.DepartmentID
+            WHERE s.SalaryID IN (
+                SELECT MAX(SalaryID)
+                FROM salaries
+                WHERE EmployeeID = s.EmployeeID
+                GROUP BY DATE(SalaryMonth)
+            )
+            AND DATE_FORMAT(s.SalaryMonth, '%%Y-%%m') <= %s
+        """
+        params = [reference_month]
+        if department_name:
+            query += " AND d.DepartmentName = %s"
+            params.append(department_name)
+        query += " ORDER BY Month DESC"
+
+        with self.conn.cursor() as cursor:
+            cursor.execute(query, params)
+            return cursor.fetchall()
+
+    # === HÀM XUẤT EXCEL MỚI ===
+    def get_all_salaries_for_export(self, month: str):
+        with self.conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT s.EmployeeID, e.FullName, d.DepartmentName,
+                       s.BaseSalary, s.Bonus, s.Deductions, s.NetSalary,
+                       DATE_FORMAT(s.SalaryMonth, '%%Y-%%m') as SalaryMonth
+                FROM salaries s
+                JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+                LEFT JOIN departments_payroll d ON e.DepartmentID = d.DepartmentID
+                WHERE DATE_FORMAT(s.SalaryMonth, '%%Y-%%m') = %s
+                  AND s.SalaryID = (
+                      SELECT MAX(SalaryID)
+                      FROM salaries
+                      WHERE EmployeeID = s.EmployeeID
+                        AND DATE_FORMAT(SalaryMonth, '%%Y-%%m') = %s
+                  )
+                ORDER BY d.DepartmentName, e.EmployeeID
+            """, (month, month))
+            return cursor.fetchall()
+
+    def get_salaries_by_department_for_export(self, month: str, department_name: str):
+        with self.conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT s.EmployeeID, e.FullName, d.DepartmentName,
+                       s.BaseSalary, s.Bonus, s.Deductions, s.NetSalary,
+                       DATE_FORMAT(s.SalaryMonth, '%%Y-%%m') as SalaryMonth
+                FROM salaries s
+                JOIN employees_payroll e ON s.EmployeeID = e.EmployeeID
+                LEFT JOIN departments_payroll d ON e.DepartmentID = d.DepartmentID
+                WHERE DATE_FORMAT(s.SalaryMonth, '%%Y-%%m') = %s
+                  AND d.DepartmentName = %s
+                  AND s.SalaryID = (
+                      SELECT MAX(SalaryID)
+                      FROM salaries
+                      WHERE EmployeeID = s.EmployeeID
+                        AND DATE_FORMAT(SalaryMonth, '%%Y-%%m') = %s
+                  )
+                ORDER BY e.EmployeeID
+            """, (month, department_name, month))
+            return cursor.fetchall()

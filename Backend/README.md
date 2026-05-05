@@ -21,17 +21,21 @@ src/
  Các file đã chỉnh sửa
  backend
  - payroll
- payroll_model.py
  payroll_repository.py
  payroll_route.py
- payroll_schema.py
  payroll_service.py
+ payroll_controller.py
+ - attendance
+ attendance_repository.py
+ attendance_route.py
+ attendance_service.py
 
 frontend 
 - pages
 payroll.jsx
+attendance.jsx
 - services
 payrollservice.js
-- vute.config
+attendanceservice.js
 
 

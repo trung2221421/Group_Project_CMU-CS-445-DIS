@@ -3,6 +3,8 @@ from typing import Optional
 from src.config.mysql import get_mysql_connection
 from .payroll_repository import PayrollRepository
 from .payroll_service import PayrollService
+from datetime import datetime
+from urllib.parse import quote              # thêm import này
 from .payroll_schema import (
     SalarySchema,
     SalaryHistorySchema,
@@ -79,3 +81,32 @@ def update_salary(req: UpdateSalaryRequest, service: PayrollService = Depends(ge
 # MỚI: Xoá nhân viên
 def delete_employee(employee_id: int, service: PayrollService = Depends(get_service)):
     return service.delete_employee_data(employee_id)
+
+def get_salary_trend(
+    months: int = 6,
+    reference_month: Optional[str] = None,
+    department_name: Optional[str] = None,
+    service: PayrollService = Depends(get_service)
+):
+    if reference_month is None:
+        reference_month = datetime.now().strftime('%Y-%m')
+    return service.get_salary_trend(months, reference_month, department_name)
+def export_all_employees(month: str, service: PayrollService = Depends(get_service)):
+    excel_file = service.export_all_employees_excel(month)
+    safe_month = quote(month, safe='')
+    return StreamingResponse(
+        excel_file,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=all_employees_{safe_month}.xlsx"}
+    )
+
+def export_by_department(month: str, department_name: str, service: PayrollService = Depends(get_service)):
+    excel_file = service.export_by_department_excel(month, department_name)
+    # Mã hóa tên phòng ban để tránh lỗi Unicode trong header
+    safe_dept = quote(department_name, safe='')
+    safe_month = quote(month, safe='')
+    return StreamingResponse(
+        excel_file,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=department_{safe_dept}_{safe_month}.xlsx"}
+    )
