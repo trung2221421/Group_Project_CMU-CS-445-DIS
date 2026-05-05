@@ -1,10 +1,5 @@
-# src/modules/employees/employee_route.py
-from fastapi import APIRouter, Query, HTTPException, Path, Depends
+from fastapi import APIRouter, Query, HTTPException, Path
 from typing import Optional
-
-# Import từ module phân quyền mới
-from src.middlewares.auth_middleware import get_current_user
-from src.config.permissions import has_min_role
 
 from .employee_controller import (
     get_employees,
@@ -22,11 +17,9 @@ async def filters():
 @router.get("/")
 async def get_employees_list(
     dept: Optional[str] = Query(None),
-    role: Optional[str] = Query(None),
-    user: dict = Depends(get_current_user)
+    role: Optional[str] = Query(None)
 ):
-    if not has_min_role(user, "truong_phong"):
-        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập danh sách nhân viên")
+    # Đã loại bỏ tham số user, không cần xác thực
     return get_employees(dept, role)
 
 @router.get("/{emp_id}")
@@ -40,12 +33,10 @@ async def get_employee(emp_id: int = Path(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{emp_id}")
-async def delete_employee_route(
-    emp_id: int = Path(...),
-    user: dict = Depends(get_current_user)
-):
+async def delete_employee_route(emp_id: int = Path(...)):
+    # Đã loại bỏ tham số user
     try:
-        result = controller_delete_employee(emp_id, user)
+        result = controller_delete_employee(emp_id)
         return result
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))

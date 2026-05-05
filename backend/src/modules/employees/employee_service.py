@@ -1,9 +1,5 @@
-# src/modules/employees/employee_service.py
 from .employee_repository import get_human_data, get_payroll_data, get_salary_data, has_payroll_data
-
-from src.config.auth import has_min_role, is_accountant
 from .employee_repository import get_employee_payroll_info, delete_human_employee, delete_payroll_employee
-
 
 def get_employee_list(dept=None, role=None):
     human = get_human_data()
@@ -22,7 +18,6 @@ def get_employee_list(dept=None, role=None):
 
         p = payroll_map.get(str(h["id"]), {})
         base_salary = salary_map.get(str(h["id"]), None)
-        # Dùng has_payroll_data để kiểm tra đồng bộ chính xác
         synced = has_payroll_data(h["id"])
         sync_status = "Đã đồng bộ" if synced else "Chưa đồng bộ"
 
@@ -61,34 +56,20 @@ def get_employee_by_id(emp_id: int):
             return {
                 "id": h["id"],
                 "name": h["name"],
-                # ... (giữ nguyên các trường khác)
+                # ... các trường khác giữ nguyên
                 "sync_status": sync_status,
             }
     return None
 
-def delete_employee(emp_id: int, user: dict):
-    # Kiểm tra mọi dữ liệu payroll
-    payroll_exists = has_payroll_data(emp_id)
-
-    can_delete_human = False
-    can_delete_payroll = False
-
-    if is_accountant(user):
-        can_delete_payroll = True
-        if has_min_role(user, "truong_phong"):
-            can_delete_human = True
-    else:
-        if has_min_role(user, "truong_phong"):
-            if not payroll_exists:
-                can_delete_human = True
-            else:
-                raise PermissionError("Không thể xóa nhân viên đã có dữ liệu payroll.")
-        else:
-            raise PermissionError("Bạn không có quyền xóa nhân viên.")
-
-    if can_delete_human:
-        delete_human_employee(emp_id)
-    if can_delete_payroll:
-        delete_payroll_employee(emp_id)
-
+def delete_employee(emp_id: int):
+    """
+    Xóa nhân viên không giới hạn quyền.
+    Xóa cả HR và Payroll nếu tồn tại.
+    """
+    delete_human_employee(emp_id)
+    delete_payroll_employee(emp_id)
     return {"message": "Xóa thành công"}
+
+# Hàm alias để controller gọi
+def delete_employee_from_service(emp_id: int):
+    return delete_employee(emp_id)
