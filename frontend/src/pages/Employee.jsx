@@ -4,8 +4,10 @@ import { useState, useRef, useEffect } from 'react';
 import { FileUp, X, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import MainLayout from '../layout/MainLayout.jsx';
-import EmployeeForm, { EmployeeExtraCards } from '../components/forms/EmployeeForm.jsx';
+import EmployeeForm from '../components/forms/EmployeeForm.jsx';
 import { createEmployee, updateEmployee, getEmployeeById } from '../services/employeeService';
+import { getFilters } from '../services/employeesService';
+import { CURRENT_USER } from '../services/config.js'; // thêm import
 
 const formatDate = (value) => {
   if (!value) return '';
@@ -14,9 +16,7 @@ const formatDate = (value) => {
     return `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
   }
   const date = new Date(value);
-  if (!isNaN(date.getTime())) {
-    return date.toISOString().split('T')[0];
-  }
+  if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
   return value;
 };
 
@@ -29,18 +29,10 @@ export default function EmployeeFormPage() {
   const fileInputRef = useRef(null);
   const [employee, setEmployee] = useState(null);
 
-  // Khi có id (chỉnh sửa), tải dữ liệu nhân viên
   useEffect(() => {
     if (id) {
-      getEmployeeById(id)
-        .then(data => setEmployee(data))
-        .catch(err => {
-          console.error('Lỗi tải nhân viên:', err);
-          setEmployee(null);
-        });
-    } else {
-      setEmployee(null); // Reset khi thêm mới
-    }
+      getEmployeeById(id).then(setEmployee).catch(err => { console.error(err); setEmployee(null); });
+    } else setEmployee(null);
   }, [id]);
 
   const handleSubmit = async (formData) => {
@@ -48,15 +40,40 @@ export default function EmployeeFormPage() {
       await updateEmployee(id, formData);
       setSuccessMsg('Cập nhật nhân viên thành công!');
     } else {
-      await createEmployee(formData);
+      const result = await createEmployee(formData);
+      if (formData.create_account && result.id) {
+        try {
+          const res = await fetch('http://localhost:8000/api/accounts/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-User': CURRENT_USER,
+            },
+            body: JSON.stringify({
+              username: formData.account_username,
+              password: formData.account_password,
+              employee_id: result.id,
+              full_name: formData.name,
+              email: formData.email,
+            }),
+          });
+          if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.detail || 'Lỗi tạo tài khoản');
+          }
+        } catch (err) {
+          console.error('Lỗi tạo tài khoản:', err);
+          setSuccessMsg(`Nhân viên đã được tạo nhưng tài khoản bị lỗi: ${err.message}`);
+          setTimeout(() => navigate('/employees'), 2000);
+          return;
+        }
+      }
       setSuccessMsg('Tạo mới nhân viên thành công!');
       setTimeout(() => navigate('/employees'), 1500);
     }
   };
 
-  const handleFileButtonClick = () => {
-    fileInputRef.current?.click();
-  };
+  const handleFileButtonClick = () => fileInputRef.current?.click();
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
@@ -64,40 +81,152 @@ export default function EmployeeFormPage() {
 
     setImporting(true);
     setImportError('');
-    let successCount = 0;
+    setSuccessMsg('');
 
     try {
+      // Lấy danh sách phòng ban & chức vụ để tra cứu tên -> id
+      const filters = await getFilters();
+      const deptMap = {};
+      (filters.departments || []).forEach(d => {
+        if (typeof d === 'object' && d.name) deptMap[d.name.toLowerCase().trim()] = d.id;
+      });
+      const roleMap = {};
+      (filters.roles || []).forEach(r => {
+        if (typeof r === 'object' && r.name) roleMap[r.name.toLowerCase().trim()] = r.id;
+      });
+
+      // Đọc file Excel
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-
       if (!jsonData.length) throw new Error('File Excel không chứa dữ liệu.');
 
-      const employees = jsonData.map(row => ({
-        name: row['Họ và tên'] || row['Name'] || '',
-        phone: row['Số điện thoại'] || row['Phone'] || '',
-        date_of_birth: formatDate(row['Ngày sinh'] || row['Date of Birth']),
-        gender: row['Giới tính'] || row['Gender'] || '',
-        email: row['Email'] || '',
-        hire_date: formatDate(row['Ngày vào làm'] || row['Hire Date']),
-        department_id: row['Phòng ban'] || row['Department'] || null,
-        position_id: row['Chức vụ'] || row['Position'] || null,
-        status: row['Trạng thái'] || row['Status'] || 'Đang làm việc',
-        sync_to_payroll: true,
-      }));
+      const errors = [];
+      const successList = [];
+      const toImport = [];
 
-      for (const emp of employees) {
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        const name = (row['Họ và tên'] || row['Name'] || '').trim();
+        const phone = (row['Số điện thoại'] || row['Phone'] || '').trim();
+        if (!name || !phone) {
+          errors.push({ 'Mã NV': row['Mã NV'] || '', 'Họ và tên': name, 'Lỗi': 'Thiếu họ tên hoặc số điện thoại.' });
+          continue;
+        }
+
+        // Xử lý phòng ban
+        let department_id = row['Phòng ban'] || row['Department'];
+        if (department_id && isNaN(Number(department_id))) {
+          const idFromName = deptMap[department_id.toLowerCase().trim()];
+          if (idFromName !== undefined) department_id = idFromName;
+          else { errors.push({ 'Mã NV': row['Mã NV'] || '', 'Họ và tên': name, 'Lỗi': `Phòng ban "${department_id}" không tồn tại.` }); continue; }
+        } else if (department_id) department_id = Number(department_id);
+        else department_id = null;
+
+        // Xử lý chức vụ
+        let position_id = row['Chức vụ'] || row['Position'];
+        if (position_id && isNaN(Number(position_id))) {
+          const idFromName = roleMap[position_id.toLowerCase().trim()];
+          if (idFromName !== undefined) position_id = idFromName;
+          else { errors.push({ 'Mã NV': row['Mã NV'] || '', 'Họ và tên': name, 'Lỗi': `Chức vụ "${position_id}" không tồn tại.` }); continue; }
+        } else if (position_id) position_id = Number(position_id);
+        else position_id = null;
+
+        // Lấy thông tin tài khoản từ Excel (có thể bỏ qua nếu trống)
+        const username = (row['UserName'] || '').trim();
+        const password = (row['PasswordHash'] || '').trim();
+
+        if (username) {
+          try {
+            const res = await fetch(`http://localhost:8000/api/accounts/check-username?username=${encodeURIComponent(username)}`, {
+              headers: { 'X-User': CURRENT_USER }
+            });
+            if (res.ok) {
+              const check = await res.json();
+              if (check.exists) {
+                errors.push({ 'Mã NV': row['Mã NV'] || '', 'Họ và tên': name, 'Lỗi': `Tên đăng nhập "${username}" đã tồn tại.` });
+                continue;
+              }
+            } else {
+              const errorText = await res.text();
+              errors.push({ 'Mã NV': row['Mã NV'] || '', 'Họ và tên': name, 'Lỗi': `Lỗi kiểm tra username: ${errorText}` });
+              continue;
+            }
+          } catch (err) {
+            errors.push({ 'Mã NV': row['Mã NV'] || '', 'Họ và tên': name, 'Lỗi': `Lỗi kiểm tra username: ${err.message}` });
+            continue;
+          }
+        }
+
+        toImport.push({
+          name,
+          phone,
+          date_of_birth: formatDate(row['Ngày sinh'] || row['Date of Birth']) || null,
+          gender: (row['Giới tính'] || row['Gender'] || '').trim() || null,
+          email: (row['Email'] || '').trim() || null,
+          hire_date: formatDate(row['Ngày vào làm'] || row['Hire Date']) || null,
+          department_id,
+          position_id,
+          status: (row['Trạng thái'] || row['Status'] || 'Đang làm việc').trim(),
+          sync_to_payroll: true,
+          create_account: username && password ? true : false,
+          account_username: username || '',
+          account_password: password || '',
+        });
+      }
+
+      // Import từng nhân viên
+      for (const emp of toImport) {
         try {
-          await createEmployee(emp);
-          successCount++;
+          const result = await createEmployee(emp);
+          if (emp.create_account && result.id) {
+            try {
+              const res = await fetch('http://localhost:8000/api/accounts/create', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-User': CURRENT_USER,
+                },
+                body: JSON.stringify({
+                  username: emp.account_username,
+                  password: emp.account_password,
+                  employee_id: result.id,
+                  full_name: emp.name,
+                  email: emp.email,
+                }),
+              });
+              if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.detail || 'Lỗi tạo tài khoản');
+              }
+            } catch (err) {
+              errors.push({ 'Mã NV': '', 'Họ và tên': emp.name, 'Lỗi': `Tài khoản: ${err.message}` });
+            }
+          }
+          successList.push({ 'Mã NV': '', 'Họ và tên': emp.name });
         } catch (err) {
-          console.error(`Lỗi khi import nhân viên "${emp.name}":`, err);
+          errors.push({ 'Mã NV': '', 'Họ và tên': emp.name, 'Lỗi': err.message || 'Lỗi không xác định' });
         }
       }
 
-      setSuccessMsg(`Đã nhập thành công ${successCount}/${employees.length} nhân viên.`);
+      // Xuất file kết quả nếu có lỗi
+      if (errors.length > 0) {
+        const resultData = [...errors, ...successList.map(s => ({ ...s, 'Lỗi': '' }))];
+        const ws = XLSX.utils.json_to_sheet(resultData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Ket_qua_import');
+        XLSX.writeFile(wb, 'Ket_qua_nhap_nhan_vien.xlsx');
+      }
+
+      const totalSuccess = successList.length;
+      const totalError = errors.length;
+      setSuccessMsg(
+        totalError > 0
+          ? `Đã nhập thành công ${totalSuccess} nhân viên. ${totalError} lỗi (xem file kết quả).`
+          : `Đã nhập thành công toàn bộ ${totalSuccess} nhân viên.`
+      );
     } catch (err) {
       console.error('Import Excel failed:', err);
       setImportError(err.message || 'Không thể đọc file Excel.');
@@ -142,8 +271,6 @@ export default function EmployeeFormPage() {
       )}
 
       <EmployeeForm employeeData={employee || {}} onSubmit={handleSubmit} isEdit={!!id} />
-
-      {!id && <EmployeeExtraCards />}
     </MainLayout>
   );
 }

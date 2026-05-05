@@ -106,3 +106,20 @@ def delete_payroll_employee(emp_id: int):
         conn.commit()
     finally:
         conn.close()
+
+def has_payroll_data(emp_id: int) -> bool:
+
+    conn = get_mysql_connection()
+    try:
+        cursor = conn.cursor()
+        # Kiểm tra employees_payroll
+        cursor.execute("SELECT 1 FROM employees_payroll WHERE EmployeeID = %s", (emp_id,))
+        if cursor.fetchone():
+            return True
+        # Kiểm tra salaries
+        cursor.execute("SELECT 1 FROM salaries WHERE EmployeeID = %s", (emp_id,))
+        if cursor.fetchone():
+            return True
+        return False
+    finally:
+        conn.close()

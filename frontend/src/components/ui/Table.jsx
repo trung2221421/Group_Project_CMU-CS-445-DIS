@@ -22,6 +22,7 @@ export default function Table({
   totalItems: externalTotalItems,
   showFooter = true,
   onRowClick, // thêm prop này
+  
 }) {
   const [currentPage, setCurrentPage] = useState(1);
   const totalItems = externalTotalItems ?? rows.length;

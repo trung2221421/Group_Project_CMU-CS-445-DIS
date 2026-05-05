@@ -5,7 +5,7 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 sys.stdout.reconfigure(encoding='utf-8')
-
+from src.modules.integration.integration_route import router as integration_router
 from fastapi import FastAPI
 from src.middlewares.cors_middleware import setup_cors
 
@@ -15,6 +15,7 @@ from src.modules.employee.employee_route import router as employee_router
 
 # Import router Reports
 from src.modules.Reports.reports_route import router as reports_router   # <--- THÊM DÒNG NÀY
+from src.modules.Accounts.account_route import router as accounts_router   # <--- THÊM DÒNG NÀY
 
 app = FastAPI(
     title="HR Management System",
@@ -54,3 +55,6 @@ async def startup_event():
             methods = ", ".join(route.methods)
             print(f"   {methods:20} {route.path}")
     print("\n" + "="*50 + "\n")
+    
+app.include_router(integration_router) 
+app.include_router(accounts_router, prefix="/api/accounts", tags=["Accounts"])

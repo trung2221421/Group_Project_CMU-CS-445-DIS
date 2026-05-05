@@ -12,6 +12,7 @@
         "concurrently": "^8.2.0"
     },
     "dependencies": {
-        "dotenv": "^17.4.2"
+        "dotenv": "^17.4.2",
+        "flask": "^0.2.10"
     }
 }
