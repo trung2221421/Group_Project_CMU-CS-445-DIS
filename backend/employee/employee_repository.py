@@ -79,3 +79,12 @@ def update_payroll_employee(emp_id: int, status: str):
         conn.commit()
     finally:
         conn.close()
+# src/modules/employee/employee_repository.py
+def check_email_exists(email: str) -> bool:
+    conn = get_sqlserver_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM employees WHERE Email = ?", (email,))
+        return cursor.fetchone() is not None
+    finally:
+        conn.close()

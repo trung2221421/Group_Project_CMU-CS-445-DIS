@@ -5,12 +5,13 @@ import {
   Filter, Plus, Search, RefreshCw, AlertCircle, Users, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import * as XLSX from 'xlsx'; // import thư viện xuất Excel
 
 import MainLayout from '../layout/MainLayout.jsx';
 import Card from '../components/ui/Card.jsx';
 import Table from '../components/ui/Table.jsx';
 import { getEmployees, getFilters } from '../services/employeesService.js';
-import { deleteEmployee } from '../services/employeeService'; // thêm dòng này
+import { deleteEmployee } from '../services/employeeService';
 
 // ========================
 // Custom Hook: useEmployees
@@ -127,6 +128,8 @@ export default function Employees() {
     loadInitialData,
   } = useEmployees();
 
+  const [showExportModal, setShowExportModal] = useState(false);
+
   const navigate = useNavigate();
 
   // Local UI state
@@ -210,6 +213,55 @@ export default function Employees() {
       alert(err.message); // hiển thị lỗi (403, 500,...)
     }
   };
+
+  // ✅ Hàm xuất Excel (đặt đúng trong component)
+    // ✅ Hàm xuất Excel (chỉ nhân viên đang chọn)
+  
+    // ✅ Hàm xuất Excel (toàn bộ nhân viên đang hiển thị sau filter/search)
+    const exportAll = () => {
+      const data = filteredEmployees.map(emp => ({
+        "Mã NV": emp.id,
+        "Họ và tên": emp.name,
+        "Ngày sinh": emp.date_of_birth || '',
+        "Giới tính": emp.gender || '',
+        "Email": emp.email || '',
+        "Số điện thoại": emp.phone || '',
+        "Phòng ban": emp.dept || '',
+        "Chức vụ": emp.role || '',
+        "Ngày vào làm": emp.hire_date || '',
+        "Lương cơ bản": emp.salary ? `${Number(emp.salary).toLocaleString()} đ` : "Chưa có",
+        "Trạng thái": emp.status || "Không xác định",
+        "Đồng bộ": emp.sync_status || "Không rõ",
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Danh sách nhân viên");
+      XLSX.writeFile(workbook, "Danh_sach_nhan_vien.xlsx");
+    };
+    const exportSingle = () => {
+      if (!selectedEmployee) return;
+        const emp = selectedEmployee;
+        const data = [{
+          "Mã NV": emp.id,
+          "Họ và tên": emp.name,
+          "Ngày sinh": emp.date_of_birth || '',
+          "Giới tính": emp.gender || '',
+          "Email": emp.email || '',
+          "Số điện thoại": emp.phone || '',
+          "Phòng ban": emp.dept || '',
+          "Chức vụ": emp.role || '',
+          "Ngày vào làm": emp.hire_date || '',
+          "Lương cơ bản": emp.salary ? `${Number(emp.salary).toLocaleString()} đ` : "Chưa có",
+          "Trạng thái": emp.status || "Không xác định",
+          "Đồng bộ": emp.sync_status || "Không rõ",
+        }];
+
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, `NV_${emp.id}`);
+      XLSX.writeFile(workbook, `Bao_cao_${emp.name.replace(/\s+/g, '_')}.xlsx`);
+    };
 
   // Render cell
   const renderEmployeeCell = useCallback((row, column) => {
@@ -481,9 +533,15 @@ export default function Employees() {
             <div className="two-mini">
               <div>
                 <span>Lương cơ bản</span>
-                <b>{selectedEmployee.salary !== 'Chưa có' 
-                  ? `${Number(selectedEmployee.salary).toLocaleString()} đ` 
+                <b>{selectedEmployee.salary
+                  ? `${Number(selectedEmployee.salary).toLocaleString()} đ`
                   : 'Chưa có'}</b>
+              </div>
+              <div>
+                <span>Đồng bộ</span>
+                <b style={{ color: selectedEmployee.sync_status === 'Đã đồng bộ' ? '#2e7d32' : '#d32f2f' }}>
+                  {selectedEmployee.sync_status || 'Không rõ'}
+                </b>
               </div>
             </div>
 
@@ -504,12 +562,47 @@ export default function Employees() {
                 <Trash2 size={17} /> Xóa
               </button>
             </div>
-            <button className="btn primary full" style={{ marginTop: '12px' }}>
+            <button className="btn primary full" style={{ marginTop: '12px' }} onClick={() => setShowExportModal(true)}>
               <FileText size={17} /> Xuất báo cáo
             </button>
           </Card>
         )}
       </div>
+      {showExportModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '12px', padding: '24px',
+            minWidth: '320px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)'
+          }}>
+            <h3 style={{ marginTop: 0 }}>📄 Chọn loại xuất báo cáo</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
+              <button
+                className="btn primary full"
+                onClick={() => { exportAll(); setShowExportModal(false); }}
+              >
+                <FileText size={17} /> Xuất toàn bộ danh sách ({filteredEmployees.length})
+              </button>
+              <button
+                className="btn primary full"
+                onClick={() => { exportSingle(); setShowExportModal(false); }}
+                disabled={!selectedEmployee}
+              >
+                <FileText size={17} /> Xuất chỉ nhân viên này
+              </button>
+              <button
+                className="btn ghost full"
+                onClick={() => setShowExportModal(false)}
+              >
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </MainLayout>
   );
 }

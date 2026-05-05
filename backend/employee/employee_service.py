@@ -4,10 +4,14 @@ from .employee_repository import (
     insert_payroll_employee,
     update_payroll_employee,    # import hàm mới
     get_department_by_id,
-    get_position_by_id
+    get_position_by_id,
+    check_email_exists   
 )
 
 def create_employee(data: dict):
+    if data.get('email'):
+        if check_email_exists(data['email']):
+            raise ValueError("Email đã tồn tại trong hệ thống.")
     if 'department_id' in data and data['department_id'] is not None:
         data['department_id'] = int(data['department_id'])
     if 'position_id' in data and data['position_id'] is not None:

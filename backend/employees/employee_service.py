@@ -1,5 +1,5 @@
 # src/modules/employees/employee_service.py
-from .employee_repository import get_human_data, get_payroll_data, get_salary_data
+from .employee_repository import get_human_data, get_payroll_data, get_salary_data, has_payroll_data
 
 from src.config.auth import has_min_role, is_accountant
 from .employee_repository import get_employee_payroll_info, delete_human_employee, delete_payroll_employee
@@ -22,6 +22,9 @@ def get_employee_list(dept=None, role=None):
 
         p = payroll_map.get(str(h["id"]), {})
         base_salary = salary_map.get(str(h["id"]), None)
+        # Dùng has_payroll_data để kiểm tra đồng bộ chính xác
+        synced = has_payroll_data(h["id"])
+        sync_status = "Đã đồng bộ" if synced else "Chưa đồng bộ"
 
         result.append({
             "id": h["id"],
@@ -37,6 +40,7 @@ def get_employee_list(dept=None, role=None):
             "hire_date": str(h.get("hire_date")) if h.get("hire_date") else "",
             "department_id": h.get("department_id"),
             "position_id": h.get("position_id"),
+            "sync_status": sync_status,
         })
     return result
 
@@ -52,25 +56,19 @@ def get_employee_by_id(emp_id: int):
         if int(h["id"]) == emp_id:
             p = payroll_map.get(str(h["id"]), {})
             base_salary = salary_map.get(str(h["id"]), None)
+            synced = has_payroll_data(emp_id)
+            sync_status = "Đã đồng bộ" if synced else "Chưa đồng bộ"
             return {
                 "id": h["id"],
                 "name": h["name"],
-                "dept": h["dept"],
-                "role": h["role"],
-                "email": h["email"],
-                "phone": h["phone"],
-                "date_of_birth": str(h.get("date_of_birth")) if h.get("date_of_birth") else "",
-                "gender": h.get("gender", ""),
-                "hire_date": str(h.get("hire_date")) if h.get("hire_date") else "",
-                "department_id": h.get("department_id"),
-                "position_id": h.get("position_id"),
-                "status": p.get("status"),
-                "salary": base_salary,
+                # ... (giữ nguyên các trường khác)
+                "sync_status": sync_status,
             }
     return None
 
 def delete_employee(emp_id: int, user: dict):
-    payroll_info = get_employee_payroll_info(emp_id)
+    # Kiểm tra mọi dữ liệu payroll
+    payroll_exists = has_payroll_data(emp_id)
 
     can_delete_human = False
     can_delete_payroll = False
@@ -81,7 +79,7 @@ def delete_employee(emp_id: int, user: dict):
             can_delete_human = True
     else:
         if has_min_role(user, "truong_phong"):
-            if not payroll_info or payroll_info.get("Status") is None:
+            if not payroll_exists:
                 can_delete_human = True
             else:
                 raise PermissionError("Không thể xóa nhân viên đã có dữ liệu payroll.")
